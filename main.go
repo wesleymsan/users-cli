@@ -88,6 +88,16 @@ func main() {
 					return nil
 				},
 			},
+			{
+				Name:    "update",
+				Aliases: []string{"u"},
+				Usage:   "update a user name",
+				Action: func(c *cli.Context) error {
+					name := c.Args().First()
+					newName := c.Args().Get(1)
+					return updateUserName(name, newName)
+				},
+			},
 		},
 	}
 
@@ -136,6 +146,15 @@ func filterUsers(filter interface{}) ([]*User, error) {
 	}
 
 	return users, nil
+}
+
+func updateUserName(name, newName string) error {
+	filter := bson.D{{Key: "name", Value: name}}
+
+	update := bson.D{{Key: "$set", Value: bson.D{{Key: "name", Value: newName}}}}
+
+	u := &User{}
+	return collection.FindOneAndUpdate(ctx, filter, update).Decode(u)
 }
 
 func printUsers(users []*User) {
