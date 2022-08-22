@@ -3,14 +3,17 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"os"
 	"time"
 
 	"github.com/urfave/cli/v2"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
-	"go.mongodb.org/mongo-driver/bson/primitive"
+	"gopkg.in/gookit/color.v1"
 )
 
 var collection *mongo.Collection
@@ -66,6 +69,25 @@ func main() {
 					return createUser(user)
 				},
 			},
+			{
+				Name:    "all",
+				Aliases: []string{"l"},
+				Usage:   "list all users",
+				Action: func(c *cli.Context) error {
+					users, err := getAll()
+					if err != nil {
+						if err == mongo.ErrNoDocuments {
+							fmt.Print("Nothing to see here.\nRun `add 'user'` to add a user")
+							return nil
+						}
+
+						return err
+					}
+
+					printUsers(users)
+					return nil
+				},
+			},
 		},
 	}
 
@@ -78,4 +100,50 @@ func main() {
 func createUser(user *User) error {
 	_, err := collection.InsertOne(ctx, user)
 	return err
+}
+
+func getAll() ([]*User, error) {
+	filter := bson.D{{}}
+	return filterUsers(filter)
+}
+
+func filterUsers(filter interface{}) ([]*User, error) {
+	var users []*User
+
+	cur, err := collection.Find(ctx, filter)
+	if err != nil {
+		return users, err
+	}
+
+	for cur.Next(ctx) {
+		var t User
+		err := cur.Decode(&t)
+		if err != nil {
+			return users, err
+		}
+
+		users = append(users, &t)
+	}
+
+	if err := cur.Err(); err != nil {
+		return users, err
+	}
+
+	cur.Close(ctx)
+
+	if len(users) == 0 {
+		return users, mongo.ErrNoDocuments
+	}
+
+	return users, nil
+}
+
+func printUsers(users []*User) {
+	for i, v := range users {
+		if v.Completed {
+			color.Green.Printf("%d: %s\n", i+1, v.Name)
+		} else {
+			color.Yellow.Printf("%d: %s\n", i+1, v.Name)
+		}
+	}
 }
